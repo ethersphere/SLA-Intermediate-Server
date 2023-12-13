@@ -5,13 +5,13 @@ const client = require('./db.js');
 
 // Function to fetch data from the Prometheus endpoint and save it to MongoDB
 
-async function getChunkRetrievalDuration(db) {
+async function chunkRetrievalDuration24h(db) {
   try {
-    // Connect the client to the MongoDB server
-    await client.connect();
+   
     const db = client.db('sla_metrics');
-
-    const response = await axios.get(`${process.env.PROMETHEUS}query?query=increase(beekeeper_net_avail_data_download_duration_sum%7Bsuccess%3D%22true%22%7D%5B24h%5D)%20%2F%20increase(beekeeper_net_avail_data_download_duration_count%7Bsuccess%3D%22true%22%7D%5B24h%5D)&query=bee_pusher_total_errors`);
+    const query = 'increase(beekeeper_net_avail_data_download_duration_sum{success="true"}[24h]) / increase(beekeeper_net_avail_data_download_duration_count{success="true"}[24h])'
+    const encodedQuery = encodeURIComponent(query);
+    const response = await axios.get(`${process.env.PROMETHEUS}query?query=${encodedQuery}`);
 
     const { data } = response;
 
@@ -21,36 +21,35 @@ async function getChunkRetrievalDuration(db) {
       const { metric, value } = result;
 
       const chunkRetrievalDuration = {
-        job: metric.job,
-        success: metric.success,
         timestamp: value[0],
-        value: parseFloat(value[1]),
+        value: parseFloat(value[1]) * 1000,
+        unit: "ms"
       };
       
       // Insert the data into the MongoDB collection
       const collection = db.collection('chunk_retrieval_duration');
       await collection.insertOne(chunkRetrievalDuration);
 
-      console.log('Data saved to MongoDB:', chunkRetrievalDuration);
+      console.log('Data saved to MongoDB: chunk_retrieval_duration', chunkRetrievalDuration);
     } else {
       console.error('Invalid response from Prometheus:', data);
     }
   } catch (error) {
     console.error('Error fetching data from Prometheus:', error.message);
-  } finally {
-    // Close the MongoDB client connection
-    await client.close();
   }
 }
 
+// async function getAvgFileDownloadDuration(db) {
 
-async function getDownloadSuccess24h(db) {
+// }
+
+async function avgChunkDownloadDuration(db) {
   try {
-    // Connect the client to the MongoDB server
-    await client.connect();
-    const db = client.db('sla_metrics');
 
-    const response = await axios.get(`${process.env.PROMETHEUS}query?query=(increase(beekeeper_net_avail_download_attempts[24h]) - increase(beekeeper_net_avail_download_errors_count[24h])) / increase(beekeeper_net_avail_download_attempts[24h])`);
+    const db = client.db('sla_metrics');
+    const query = 'rate(beekeeper_check_data_durability_chunk_download_duration_seconds_sum{job="dev-bee-gateway"}[172800s])/rate(beekeeper_check_data_durability_chunk_download_duration_seconds_count{job="dev-bee-gateway"}[172800s])'
+    const encodedQuery = encodeURIComponent(query);
+    const response = await axios.get(`${process.env.PROMETHEUS}query?query=${encodedQuery}`);
 
     const { data } = response;
 
@@ -59,36 +58,170 @@ async function getDownloadSuccess24h(db) {
       const result = data.data.result[0];
       const { metric, value } = result;
 
-      const downloadSuccessRate = {
-        job: metric.job,
-        success: metric.success,
+      const chunkDownloadDuration = {
         timestamp: value[0],
-        value: parseFloat(value[1]),
+        value: parseFloat(value[1]) * 1000,
+        unit: "ms"
+      };
+      
+      // Insert the data into the MongoDB collection
+      const collection = db.collection('avg_chunk_download_duration');
+      await collection.insertOne(chunkDownloadDuration);
+
+      console.log('Data saved to MongoDB: chunk_download_duration', chunkDownloadDuration);
+    } else {
+      console.error('Invalid response from Prometheus:', data);
+    }
+  } catch (error) {
+    console.error('Error fetching data from Prometheus:', error.message);
+  } 
+}
+
+async function avgFileDownloadDuration(db) {
+  try {
+
+    const db = client.db('sla_metrics');
+    const query = 'rate(beekeeper_check_data_durability_file_download_duration_seconds_sum{job="dev-bee-gateway"}[172800s])/rate(beekeeper_check_data_durability_file_download_duration_seconds_count{job="dev-bee-gateway"}[172800s])'
+    const encodedQuery = encodeURIComponent(query);
+    const response = await axios.get(`${process.env.PROMETHEUS}query?query=${encodedQuery}`);
+
+    const { data } = response;
+
+
+    if (data.status === 'success' && data.data.resultType === 'vector') {
+      const result = data.data.result[0];
+      const { metric, value } = result;
+
+      const avgFileDownloadDuration = {
+        timestamp: value[0],
+        value: parseFloat(value[1]) * 1000,
+        unit: "ms"
+      };
+      
+      // Insert the data into the MongoDB collection
+      const collection = db.collection('avg_file_download_duration');
+      await collection.insertOne(avgFileDownloadDuration);
+
+      console.log('Data saved to MongoDB: avg_file_download_duration', avgFileDownloadDuration);
+    } else {
+      console.error('Invalid response from Prometheus:', data);
+    }
+  } catch (error) {
+    console.error('Error fetching data from Prometheus:', error.message);
+  } 
+}
+
+async function fileRetrievalRate(db) {
+  try {
+    const db = client.db('sla_metrics');
+
+    const query = '1.0 - (sum(increase(beekeeper_check_data_durability_file_download_errors{job="dev-bee-gateway"}[86400s]))/sum(increase(beekeeper_check_data_durability_file_download_attempts{job="dev-bee-gateway"}[86400s])))'
+    const encodedQuery = encodeURIComponent(query);
+    const response = await axios.get(`${process.env.PROMETHEUS}query?query=${encodedQuery}`);
+
+
+    const { data } = response;
+
+
+    if (data.status === 'success' && data.data.resultType === 'vector') {
+      const result = data.data.result[0];
+      const { metric, value } = result;
+
+      const fileRetrievalRate = {
+        timestamp: value[0],
+        value: parseFloat(value[1]) * 100,
+        unit: "%"
+      };
+      
+      // Insert the data into the MongoDB collection
+      const collection = db.collection('file_retrieval_rate');
+      await collection.insertOne(fileRetrievalRate);
+
+      console.log('Data saved to MongoDB: file_retrieval_rate', fileRetrievalRate);
+    } else {
+      console.error('Invalid response from Prometheus:', data);
+    }
+  } catch (error) {
+    console.error('Error fetching data from Prometheus:', error.message);
+  } 
+}
+async function chunkRetrievalRate(db) {
+  try {
+    const db = client.db('sla_metrics');
+
+    const query = '1.0 - (sum(increase(beekeeper_check_data_durability_chunk_download_errors{job="dev-bee-gateway"}[172800s]))/sum(increase(beekeeper_check_data_durability_chunk_download_attempts{job="dev-bee-gateway"}[172800s])))'
+    const encodedQuery = encodeURIComponent(query);
+    const response = await axios.get(`${process.env.PROMETHEUS}query?query=${encodedQuery}`);
+    const { data } = response;
+
+    if (data.status === 'success' && data.data.resultType === 'vector') {
+      const result = data.data.result[0];
+      const { metric, value } = result;
+
+      const chunkRetrievalRate = {
+        timestamp: value[0],
+        value: parseFloat(value[1]) * 100,
+        unit: "%"
+      };
+      
+      // Insert the data into the MongoDB collection
+      const collection = db.collection('chunk_retrieval_rate');
+      await collection.insertOne(chunkRetrievalRate);
+
+      console.log('Data saved to MongoDB: file_retrieval_rate', chunkRetrievalRate);
+    } else {
+      console.error('Invalid response from Prometheus:', data);
+    }
+  } catch (error) {
+    console.error('Error fetching data from Prometheus:', error.message);
+  } finally {
+ 
+  }
+}
+
+async function downloadSuccess24h(db) {
+  try {
+   
+    const db = client.db('sla_metrics');
+    const query = '(increase(beekeeper_net_avail_download_attempts[24h]) - increase(beekeeper_net_avail_download_errors_count[24h])) / increase(beekeeper_net_avail_download_attempts[24h])'
+    const encodedQuery = encodeURIComponent(query);
+    const response = await axios.get(`${process.env.PROMETHEUS}query?query=${encodedQuery}`);
+    const { data } = response;
+
+
+    if (data.status === 'success' && data.data.resultType === 'vector') {
+      const result = data.data.result[0];
+      const { metric, value } = result;
+
+      const downloadSuccess24h = {
+        timestamp: value[0],
+        value: parseFloat(value[1]) * 100,
+        unit: "%"
       };
       
       // Insert the data into the MongoDB collection
       const collection = db.collection('download_success_24h');
-      await collection.insertOne(downloadSuccessRate);
+      await collection.insertOne(downloadSuccess24h);
 
-      console.log('Data saved to MongoDB:', downloadSuccessRate);
+      console.log('Data saved to MongoDB: download_success_24h', downloadSuccess24h);
     } else {
       console.error('Invalid response from Prometheus:', data);
     }
   } catch (error) {
     console.error('Error fetching data from Prometheus:', error.message);
   } finally {
-    // Close the MongoDB client connection
-    await client.close();
+
   }
 }
 
-async function getUploadSuccess24h(db) {
+async function uploadSuccess24h(db) {
   try {
-    // Connect the client to the MongoDB server
-    await client.connect();
+ 
     const db = client.db('sla_metrics');
 
-    const response = await axios.get(`${process.env.PROMETHEUS}query?query=(increase(beekeeper_net_avail_upload_attempts[24h]) - increase(beekeeper_net_avail_upload_errors_count[24h])) / increase(beekeeper_net_avail_upload_attempts[24h])`);
+    const query = '(increase(beekeeper_net_avail_upload_attempts[24h]) - increase(beekeeper_net_avail_upload_errors_count[24h])) / increase(beekeeper_net_avail_upload_attempts[24h])'
+    const encodedQuery = encodeURIComponent(query);
+    const response = await axios.get(`${process.env.PROMETHEUS}query?query=${encodedQuery}`);
 
     const { data } = response;
 
@@ -97,45 +230,47 @@ async function getUploadSuccess24h(db) {
       const result = data.data.result[0];
       const { metric, value } = result;
 
-      const uploadSuccessRate = {
-        job: metric.job,
-        success: metric.success,
+      const uploadSuccess24h = {
         timestamp: value[0],
-        value: parseFloat(value[1]),
+        value: parseFloat(value[1]) * 100,
+        unit: "%"
       };
       
       // Insert the data into the MongoDB collection
       const collection = db.collection('upload_success_24h');
-      await collection.insertOne(uploadSuccessRate);
+      await collection.insertOne(uploadSuccess24h);
 
-      console.log('Data saved to MongoDB:', uploadSuccessRate);
+      console.log('Data saved to MongoDB: upload_success_24h', uploadSuccess24h);
     } else {
       console.error('Invalid response from Prometheus:', data);
     }
   } catch (error) {
     console.error('Error fetching data from Prometheus:', error.message);
-  } finally {
-    // Close the MongoDB client connection
-    await client.close();
-  }
+  } 
 }
 
 
 async function fetchData() {
   try {
-    await client.connect();
+
     const db = client.db('sla_metrics');
 
-    await getChunkRetrievalDuration(db);
-    await getDownloadSuccess24h(db);
-    await getUploadSuccess24h(db);
+    await downloadSuccess24h(db);
+
+    await uploadSuccess24h(db);
+
+    await chunkRetrievalDuration24h(db);
+
+    await fileRetrievalRate(db);
+    await chunkRetrievalRate(db);
+
+    await avgChunkDownloadDuration(db);
+    await avgFileDownloadDuration(db);
 
     // Use Promise.all here when more retrieval functions are added
   } catch (error) {
     console.error('Error fetching data:', error.message);
-  } finally {
-    await client.close();
-  }
+  } 
 }
 
 module.exports = fetchData;

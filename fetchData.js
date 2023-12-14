@@ -13,7 +13,18 @@ async function getDownloadSuccess24h(db) {
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
-      const { values } = data.data.result[0];
+      let { values } = data.data.result[0];
+
+       // Convert timestamps to human-readable ISO date strings and check for numeric values
+      values = values.reduce((acc, [timestamp, value]) => {
+        const date = new Date(timestamp * 1000).toISOString();
+        const numericValue = parseFloat(value);
+        if (Number.isFinite(numericValue)) {
+          acc.push([date, numericValue]);
+        }
+        return acc;
+      }, []);
+   
       const downloadSuccess24h = {
         values: values,
         unit: "%",
@@ -52,8 +63,18 @@ async function getUploadSuccess24h(db) {
 
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
-      const result = data.data.result[0];
-      const { values } = result;
+      let { values } = data.data.result[0];
+
+       // Convert timestamps to human-readable ISO date strings and check for numeric values
+      values = values.reduce((acc, [timestamp, value]) => {
+        const date = new Date(timestamp * 1000).toISOString();
+        const numericValue = parseFloat(value) * 100;
+        if (Number.isFinite(numericValue)) {
+          acc.push([date, numericValue]);
+        }
+        return acc;
+      }, []);
+   
 
       const uploadSuccess24h = {
         values: values,
@@ -68,7 +89,7 @@ async function getUploadSuccess24h(db) {
       if (insertResult.insertedId) {
         // Delete all older entries
         await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted, new data saved to MongoDB: download_success_24h', JSON.stringify(uploadSuccess24h));
+        console.log('Old entries deleted, new data saved to MongoDB: upload_success_24h', JSON.stringify(uploadSuccess24h));
       }
 
       console.log('Data saved to MongoDB: upload_success_24h', uploadSuccess24h);
@@ -91,8 +112,17 @@ async function getDownloadSuccessAllTime(db) {
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
-      const result = data.data.result[0];
-      const { values} = result;
+      let { values } = data.data.result[0];
+       // Convert timestamps to human-readable ISO date strings and check for numeric values
+      values = values.reduce((acc, [timestamp, value]) => {
+        const date = new Date(timestamp * 1000).toISOString();
+        const numericValue = parseFloat(value) * 100;
+        if (Number.isFinite(numericValue)) {
+          acc.push([date, numericValue]);
+        }
+        return acc;
+      }, []);
+
       const downloadSuccessAllTime = {
         values: values,
         unit: "%",
@@ -106,7 +136,7 @@ async function getDownloadSuccessAllTime(db) {
       if (insertResult.insertedId) {
         // Delete all older entries
         await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted, new data saved to MongoDB: download_success_24h', JSON.stringify(downloadSuccessAllTime));
+        console.log('Old entries deleted, new data saved to MongoDB: download_success_all_time', JSON.stringify(downloadSuccessAllTime));
       }
       console.log('Data saved to MongoDB: downloadSuccessAllTime', downloadSuccessAllTime);
     
@@ -132,8 +162,17 @@ async function getUploadSuccessAllTime(db) {
 
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
-      const result = data.data.result[0];
-      const { values} = result;
+      let { values } = data.data.result[0];
+       // Convert timestamps to human-readable ISO date strings and check for numeric values
+      values = values.reduce((acc, [timestamp, value]) => {
+        const date = new Date(timestamp * 1000).toISOString();
+        const numericValue = parseFloat(value) * 100;
+        if (Number.isFinite(numericValue)) {
+          acc.push([date, numericValue]);
+        }
+        return acc;
+      }, []);
+
    
       
      
@@ -150,7 +189,7 @@ async function getUploadSuccessAllTime(db) {
       if (insertResult.insertedId) {
         // Delete all older entries
         await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted, new data saved to MongoDB: download_success_24h', JSON.stringify(uploadSuccessAllTime));
+        console.log('Old entries deleted, new data saved to MongoDB: upload_success_all_time', JSON.stringify(uploadSuccessAllTime));
       }
       console.log('Data saved to MongoDB: uploadSuccessAllTime', uploadSuccessAllTime);
     
@@ -179,10 +218,19 @@ async function getFileRetrievalRate24h(db) {
 
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
-      const result = data.data.result[0];
-      const { values } = result;
+      let { values } = data.data.result[0];
+       // Convert timestamps to human-readable ISO date strings and check for numeric values
+      values = values.reduce((acc, [timestamp, value]) => {
+        const date = new Date(timestamp * 1000).toISOString();
+        const numericValue = parseFloat(value) * 100;
+        if (Number.isFinite(numericValue)) {
+          acc.push([date, numericValue]);
+        }
+        return acc;
+      }, []);
+    
 
-      const fileRetrievalRate = {
+      const fileRetrievalRate24h = {
         value: values,
         unit: "%",
         metric: "24h File Retrieval Rate"
@@ -190,17 +238,17 @@ async function getFileRetrievalRate24h(db) {
       
       // Insert the data into the MongoDB collection
       const collection = db.collection('file_retrieval_rate_24h');
-      const insertResult = await collection.insertOne(fileRetrievalRate);
+      const insertResult = await collection.insertOne(fileRetrievalRate24h);
 
         if (insertResult.insertedId) {
           // Delete all older entries
           await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-          console.log('Old entries deleted, new data saved to MongoDB: download_success_24h', JSON.stringify(fileRetrievalRate));
+          console.log('Old entries deleted, new data saved to MongoDB: file_retrieval_rate', JSON.stringify(fileRetrievalRate24h));
         }
 
-      console.log('Data saved to MongoDB: file_retrieval_rate', fileRetrievalRate);
+      console.log('Data saved to MongoDB: file_retrieval_rate', fileRetrievalRate24h);
     } else {
-      console.error(`Invalid response from Prometheus (${fileRetrievalRate.metric}):`, data);
+      console.error(`Invalid response from Prometheus (${fileRetrievalRate24h.metric}):`, data);
     }
   } catch (error) {
     console.error('Error fetching data from Prometheus:', error.message);
@@ -216,8 +264,17 @@ async function getChunkRetrievalRate24h(db) {
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
-      const result = data.data.result[0];
-      const { values } = result;
+      let { values } = data.data.result[0];
+
+       // Convert timestamps to human-readable ISO date strings and check for numeric values
+       values = values.reduce((acc, [timestamp, value]) => {
+        const date = new Date(timestamp * 1000).toISOString();
+        const numericValue = parseFloat(value) * 100;
+        if (Number.isFinite(numericValue)) {
+          acc.push([date, numericValue]);
+        }
+        return acc;
+      }, []);
 
       const chunkRetrievalRate = {
         values: values,
@@ -232,7 +289,7 @@ async function getChunkRetrievalRate24h(db) {
       if (insertResult.insertedId) {
         // Delete all older entries
         await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted, new data saved to MongoDB: download_success_24h', JSON.stringify(chunkRetrievalRate));
+        console.log('Old entries deleted, new data saved to MongoDB: chunk_retrieval_rate_24h', JSON.stringify(chunkRetrievalRate));
       }
 
       console.log('Data saved to MongoDB: file_retrieval_rate', chunkRetrievalRate);
@@ -260,8 +317,18 @@ async function getChunkRetrievalDuration24h(db) {
 
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
-      const result = data.data.result[0];
-      const { values } = result;
+      let { values } = data.data.result[0];
+       // Convert timestamps to human-readable ISO date strings and check for numeric values
+      values = values.reduce((acc, [timestamp, value]) => {
+        const date = new Date(timestamp * 1000).toISOString();
+        const numericValue = parseFloat(value);
+        if (Number.isFinite(numericValue)) {
+          acc.push([date, numericValue]);
+        }
+        return acc;
+      }, []);
+
+
       const chunkRetrievalDuration24h = {
         values: values,
         unit: "ms",
@@ -275,7 +342,7 @@ async function getChunkRetrievalDuration24h(db) {
       if (insertResult.insertedId) {
         // Delete all older entries
         await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted, new data saved to MongoDB: download_success_24h', JSON.stringify(chunkRetrievalDuration24h));
+        console.log('Old entries deleted, new data saved to MongoDB: chunk_retrieval_duration_24h', JSON.stringify(chunkRetrievalDuration24h));
       }
 
       console.log('Data saved to MongoDB: chunk_retrieval_duration', chunkRetrievalDuration24h);
@@ -299,9 +366,17 @@ async function getChunkRetrievalDurationAllTime(db) {
 
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
-      const result = data.data.result[0];
-      const { values } = result;
+      let { values } = data.data.result[0];
 
+       // Convert timestamps to human-readable ISO date strings and check for numeric values
+      values = values.reduce((acc, [timestamp, value]) => {
+        const date = new Date(timestamp * 1000).toISOString();
+        const numericValue = parseFloat(value) * 1000;
+        if (Number.isFinite(numericValue)) {
+          acc.push([date, numericValue]);
+        }
+        return acc;
+      }, []);
       const chunkRetrievalDurationAllTime = {
         values: values,
         unit: "ms",
@@ -315,7 +390,7 @@ async function getChunkRetrievalDurationAllTime(db) {
       if (insertResult.insertedId) {
         // Delete all older entries
         await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted, new data saved to MongoDB: download_success_24h', JSON.stringify(chunkRetrievalDurationAllTime));
+        console.log('Old entries deleted, new data saved to MongoDB: chunk_retrieval_duration_all_time', JSON.stringify(chunkRetrievalDurationAllTime));
       }
 
       console.log('Data saved to MongoDB: chunk_retrieval_duration', chunkRetrievalDurationAllTime);

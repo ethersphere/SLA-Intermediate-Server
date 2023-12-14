@@ -18,7 +18,7 @@ async function getDownloadSuccess24h(db) {
        // Convert timestamps to human-readable ISO date strings and check for numeric values
       values = values.reduce((acc, [timestamp, value]) => {
         const date = new Date(timestamp * 1000).toISOString();
-        const numericValue = parseFloat(value);
+        const numericValue = parseFloat(value) * 100;
         if (Number.isFinite(numericValue)) {
           acc.push([date, numericValue]);
         }
@@ -321,7 +321,7 @@ async function getChunkRetrievalDuration24h(db) {
        // Convert timestamps to human-readable ISO date strings and check for numeric values
       values = values.reduce((acc, [timestamp, value]) => {
         const date = new Date(timestamp * 1000).toISOString();
-        const numericValue = parseFloat(value);
+        const numericValue = parseFloat(value) * 1000;
         if (Number.isFinite(numericValue)) {
           acc.push([date, numericValue]);
         }

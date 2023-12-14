@@ -9,7 +9,7 @@ async function getDownloadSuccess24h(db) {
     const db = client.db('sla_metrics');
     const query = '(increase(beekeeper_net_avail_download_attempts[24h]) - increase(beekeeper_net_avail_download_errors_count[24h])) / increase(beekeeper_net_avail_download_attempts[24h])'
     const encodedQuery = encodeURIComponent(query);
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=2023-12-10T00:00:00Z&end=2023-12-31T23:59:59Z&step=1d`);
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=2023-12-10T00:00:00Z&end=2099-12-31T23:59:59Z&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {

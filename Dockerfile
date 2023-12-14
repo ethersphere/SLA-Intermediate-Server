@@ -10,6 +10,6 @@ RUN npm ci
 
 USER nobody
 
-EXPOSE 8080
+EXPOSE 3000
 
 ENTRYPOINT [ "npm", "start"]

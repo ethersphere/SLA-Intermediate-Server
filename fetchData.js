@@ -404,10 +404,8 @@ async function getChunkRetrievalDurationAllTime(db) {
 
 
 
-
 async function fetchData() {
   try {
-
     const db = client.db('sla_metrics');
     let metrics = [
       getDownloadSuccess24h(db),
@@ -418,21 +416,20 @@ async function fetchData() {
       getChunkRetrievalRate24h(db),
       getChunkRetrievalDuration24h(db),
       getChunkRetrievalDurationAllTime(db)
-    ]
+    ];
 
- 
+    // Execute all metrics functions; 
+    await Promise.all(metrics);
 
-    // Use Promise.all here when more retrieval functions are added
 
-    Promise.all(metrics).then(values => {
-      // console.log(values);  // Output: [3, 42, "foo"]
-    }).catch(error => {
-      // console.error(error);
-    });
+    console.log('All metrics functions executed successfully.');
+
   } catch (error) {
-    // console.error('Error fetching data:', error.message);
+    console.error('Error fetching data:', error.message);
+    // Additional error handling can be added here if necessary
   } 
 }
+
 
 module.exports = fetchData;
 

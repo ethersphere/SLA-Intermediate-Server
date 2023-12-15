@@ -345,7 +345,7 @@ async function getChunkRetrievalDuration24h(db) {
         console.log('Old entries deleted, new data saved to MongoDB: chunk_retrieval_duration_24h', JSON.stringify(chunkRetrievalDuration24h));
       }
 
-      console.log('Data saved to MongoDB: chunk_retrieval_duration', chunkRetrievalDuration24h);
+      console.log('Data saved to MongoDB: chunk_retrieval_duration_24h', chunkRetrievalDuration24h);
     } else {
       // console.error(`Invalid response from Prometheus (${chunkRetrievalDuration24h.metric}):`, data);
     }
@@ -393,7 +393,7 @@ async function getChunkRetrievalDurationAllTime(db) {
         console.log('Old entries deleted, new data saved to MongoDB: chunk_retrieval_duration_all_time', JSON.stringify(chunkRetrievalDurationAllTime));
       }
 
-      console.log('Data saved to MongoDB: chunk_retrieval_duration', chunkRetrievalDurationAllTime);
+      console.log('Data saved to MongoDB: chunk_retrieval_duration_all_time', chunkRetrievalDurationAllTime);
     } else {
       console.error(`Invalid response from Prometheus (${chunkRetrievalDurationAllTime.metric}):`, data);
     }

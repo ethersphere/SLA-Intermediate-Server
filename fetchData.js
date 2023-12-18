@@ -405,7 +405,7 @@ async function getChunkRetrievalDurationAllTime(db) {
 async function getFileDownloadSpeed24h(db) {
   try {
     const db = client.db('sla_metrics');
-    const query = 'beekeeper_check_longavailability_d_download_size_bytes / (beekeeper_check_longavailability_d_download_duration_seconds_sum{job="dev-bee-gateway"} / beekeeper_check_longavailability_d_download_duration_seconds_count{job="dev-bee-gateway"})';
+    const query = 'beekeeper_check_longavailability_d_download_size_bytes / (rate(beekeeper_check_longavailability_d_download_duration_seconds_sum{job="dev-bee-gateway"}[24h]) / rate(beekeeper_check_longavailability_d_download_duration_seconds_count{job="dev-bee-gateway"}[24h]))';
     const encodedQuery = encodeURIComponent(query);
     const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=2023-12-13T00:00:00Z&end=2023-12-31T23:59:59Z&step=5h`);
 
@@ -456,6 +456,60 @@ async function getFileDownloadSpeed24h(db) {
   }
 }
 
+async function getFileDownloadSpeedAllTime(db) {
+  try {
+    const db = client.db('sla_metrics');
+    const query = 'beekeeper_check_longavailability_d_download_size_bytes / (beekeeper_check_longavailability_d_download_duration_seconds_sum{job="dev-bee-gateway"} / beekeeper_check_longavailability_d_download_duration_seconds_count{job="dev-bee-gateway"})';
+    const encodedQuery = encodeURIComponent(query);
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=2023-12-13T00:00:00Z&end=2023-12-31T23:59:59Z&step=5h`);
+
+    const { data } = response;
+
+    if (data.status === 'success' && data.data.resultType === 'matrix') {
+      let aggregatedValues = {};
+
+      // Aggregate values by timestamp
+      data.data.result.forEach(result => {
+        result.values.forEach(([timestamp, value]) => {
+          if (!aggregatedValues[timestamp]) {
+            aggregatedValues[timestamp] = [];
+          }
+          aggregatedValues[timestamp].push(parseFloat(value));
+        });
+      });
+      console.log(aggregatedValues)
+      // Calculate averages for each timestamp and convert to Mebibytes
+      let averageValues = Object.entries(aggregatedValues).map(([timestamp, values]) => {
+        const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+        const averageMebibytes = average / 1048576; // Convert bytes to Mebibytes
+        return [new Date(timestamp * 1000).toISOString(), averageMebibytes];
+      });
+
+      const fileDownloadSpeedAllTime = {
+        values: averageValues,
+        unit: "MiB/s",
+        metric: "File Download Speed 24h"
+      };
+      
+      // Insert the data into the MongoDB collection
+      const collection = db.collection('file_download_speed_all_time');
+      const insertResult = await collection.insertOne(fileDownloadSpeedAllTime);
+
+      if (insertResult.insertedId) {
+        // Delete all older entries
+        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
+        console.log('Old entries deleted, new data saved to MongoDB: file_download_speed_24h', JSON.stringify(fileDownloadSpeedAllTime));
+      }
+
+      console.log('Data saved to MongoDB: file_download_speed_24h', fileDownloadSpeedAllTime);
+    } else {
+      console.error(`Invalid response from Prometheus (${fileDownloadSpeedAllTime.metric}):`, data);
+    }
+  } catch (error) {
+    console.error('Error fetching data from Prometheus:', error.message);
+  }
+}
+
 
 async function fetchData() {
   try {
@@ -469,8 +523,8 @@ async function fetchData() {
       getChunkRetrievalRate24h(db),
       getChunkRetrievalDuration24h(db),
       getChunkRetrievalDurationAllTime(db),
-      getFileDownloadSpeed24h(db)
-      
+      getFileDownloadSpeed24h(db),
+      getFileDownloadSpeedAllTime(db)
     ];
 
     // Execute all metrics functions; 

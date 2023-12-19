@@ -423,7 +423,7 @@ async function getFileDownloadSpeed24h(db) {
           aggregatedValues[timestamp].push(parseFloat(value));
         });
       });
-      console.log(aggregatedValues)
+
       // Calculate averages for each timestamp and convert to Mebibytes
       let averageValues = Object.entries(aggregatedValues).map(([timestamp, values]) => {
         const average = values.reduce((sum, val) => sum + val, 0) / values.length;
@@ -477,7 +477,6 @@ async function getFileDownloadSpeedAllTime(db) {
           aggregatedValues[timestamp].push(parseFloat(value));
         });
       });
-      console.log(aggregatedValues)
       // Calculate averages for each timestamp and convert to Mebibytes
       let averageValues = Object.entries(aggregatedValues).map(([timestamp, values]) => {
         const average = values.reduce((sum, val) => sum + val, 0) / values.length;
@@ -488,7 +487,7 @@ async function getFileDownloadSpeedAllTime(db) {
       const fileDownloadSpeedAllTime = {
         values: averageValues,
         unit: "MiB/s",
-        metric: "File Download Speed 24h"
+        metric: "File Download Speed All Time"
       };
       
       // Insert the data into the MongoDB collection
@@ -498,10 +497,10 @@ async function getFileDownloadSpeedAllTime(db) {
       if (insertResult.insertedId) {
         // Delete all older entries
         await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted, new data saved to MongoDB: file_download_speed_24h', JSON.stringify(fileDownloadSpeedAllTime));
+        console.log('Old entries deleted, new data saved to MongoDB: file_download_speed_all_time', JSON.stringify(fileDownloadSpeedAllTime));
       }
 
-      console.log('Data saved to MongoDB: file_download_speed_24h', fileDownloadSpeedAllTime);
+      console.log('Data saved to MongoDB: file_download_speed_all_time', fileDownloadSpeedAllTime);
     } else {
       console.error(`Invalid response from Prometheus (${fileDownloadSpeedAllTime.metric}):`, data);
     }

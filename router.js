@@ -25,6 +25,26 @@ router.get('/api/v1/all', async (req, res) => {
       }
     }
 
+// Loop through collections and get the most recent entry from each
+for (const { name } of collectionNames) {
+  const collection = db.collection(name);
+  const mostRecentEntry = await collection
+    .find()
+    .sort({ timestamp: -1 })
+    .limit(1)
+    .toArray();
+
+  if (mostRecentEntry.length > 0) {
+    // Filter out future timestamp values
+    const now = new Date();
+    mostRecentEntry[0].values = mostRecentEntry[0].values.filter(value => {
+      const valueDate = new Date(value[0]);
+      return valueDate <= now;
+    });
+
+    collections[name] = mostRecentEntry[0];
+  }
+}
     // Return the most recent entries from each collection
     res.json(collections);
   } catch (error) {

@@ -24,7 +24,7 @@ app.use('/', router);
 
 // Periodically fetch data
 fetchData()
-setInterval(fetchData, 10 * 1000);
+setInterval(fetchData, 60 * 10 * 1000);
 
 
 // Example route for POST request

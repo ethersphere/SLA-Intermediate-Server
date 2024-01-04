@@ -405,7 +405,7 @@ async function getFileDownloadSpeed24h(db) {
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
     const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=6h`);
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
 
     const { data } = response;
     console.log(JSON.stringify(data, null, 2))

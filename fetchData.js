@@ -207,7 +207,7 @@ async function getUploadSuccessAllTime(db) {
 async function getFileRetrievalRate24h(db) {
   try {
     const db = client.db('sla_metrics');
-    const query = '1.0 - (sum(increase(beekeeper_check_data_durability_file_download_errors{job="dev-bee-gateway"}[86400s]))/sum(increase(beekeeper_check_data_durability_file_download_attempts{job="dev-bee-gateway"}[86400s])))'
+    const query = '1.0 - (sum(increase(beekeeper_check_data_durability_file_download_errors{job="bee-sla"}[86400s]))/sum(increase(beekeeper_check_data_durability_file_download_attempts{job="bee-sla"}[86400s])))'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
     const end = "2050-12-31T23:59:59"
@@ -254,7 +254,7 @@ async function getChunkRetrievalRate24h(db) {
   try {
     const db = client.db('sla_metrics');
 
-    const query = '1.0 - (sum(increase(beekeeper_check_data_durability_chunk_download_errors{job="dev-bee-gateway"}[172800s]))/sum(increase(beekeeper_check_data_durability_chunk_download_attempts{job="dev-bee-gateway"}[172800s])))'
+    const query = '1.0 - (sum(increase(beekeeper_check_data_durability_chunk_download_errors{job="bee-sla"}[172800s]))/sum(increase(beekeeper_check_data_durability_chunk_download_attempts{job="bee-sla"}[172800s])))'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
     const end = "2050-12-31T23:59:59"
@@ -401,7 +401,7 @@ async function getChunkRetrievalDurationAllTime(db) {
 async function getFileDownloadSpeed24h(db) {
   try {
     const db = client.db('sla_metrics');
-    const query = 'beekeeper_check_longavailability_d_download_size_bytes / (rate(beekeeper_check_longavailability_d_download_duration_seconds_sum{job="dev-bee-gateway"}[24h]) / rate(beekeeper_check_longavailability_d_download_duration_seconds_count{job="dev-bee-gateway"}[24h]))';
+    const query = 'beekeeper_check_longavailability_d_download_size_bytes / (rate(beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"}[24h]) / rate(beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"}[24h]))';
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
     const end = "2050-12-31T23:59:59"
@@ -457,7 +457,7 @@ async function getFileDownloadSpeed24h(db) {
 async function getFileDownloadSpeedAllTime(db) {
   try {
     const db = client.db('sla_metrics');
-    const query = 'beekeeper_check_longavailability_d_download_size_bytes / (beekeeper_check_longavailability_d_download_duration_seconds_sum{job="dev-bee-gateway"} / beekeeper_check_longavailability_d_download_duration_seconds_count{job="dev-bee-gateway"})';
+    const query = 'beekeeper_check_longavailability_d_download_size_bytes / (beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"} / beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"})';
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
     const end = "2050-12-31T23:59:59"

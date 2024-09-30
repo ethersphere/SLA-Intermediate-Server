@@ -10,8 +10,8 @@ async function getDownloadSuccess24h(db) {
     const query = '(increase(beekeeper_net_avail_download_attempts[24h]) - increase(beekeeper_net_avail_download_errors_count[24h])) / increase(beekeeper_net_avail_download_attempts[24h])'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z'; 
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
@@ -60,8 +60,8 @@ async function getUploadSuccess24h(db) {
     const query = '(increase(beekeeper_net_avail_upload_attempts[24h]) - increase(beekeeper_net_avail_upload_errors_count[24h])) / increase(beekeeper_net_avail_upload_attempts[24h])'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
@@ -110,8 +110,8 @@ async function getDownloadSuccessAllTime(db) {
     const query = '(sum_over_time(beekeeper_net_avail_download_attempts[1h]) - sum_over_time(beekeeper_net_avail_download_errors_count[1h])) / sum_over_time(beekeeper_net_avail_download_attempts[1h])'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
@@ -161,8 +161,8 @@ async function getUploadSuccessAllTime(db) {
     const query = '(sum_over_time(beekeeper_net_avail_upload_attempts[1h]) - sum_over_time(beekeeper_net_avail_upload_errors_count[1h])) / sum_over_time(beekeeper_net_avail_upload_attempts[1h])'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
@@ -210,8 +210,8 @@ async function getFileRetrievalRate24h(db) {
     const query = '1.0 - (sum(increase(beekeeper_check_data_durability_file_download_errors{job="bee-sla"}[86400s]))/sum(increase(beekeeper_check_data_durability_file_download_attempts{job="bee-sla"}[86400s])))'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
@@ -257,8 +257,8 @@ async function getChunkRetrievalRate24h(db) {
     const query = '1.0 - (sum(increase(beekeeper_check_data_durability_chunk_download_errors{job="bee-sla"}[172800s]))/sum(increase(beekeeper_check_data_durability_chunk_download_attempts{job="bee-sla"}[172800s])))'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
@@ -309,8 +309,8 @@ async function getChunkRetrievalDuration24h(db) {
     const query = 'increase(beekeeper_net_avail_data_download_duration_sum{success="true"}[24h]) / increase(beekeeper_net_avail_data_download_duration_count{success="true"}[24h])'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
@@ -357,8 +357,8 @@ async function getChunkRetrievalDurationAllTime(db) {
     const query = 'beekeeper_net_avail_data_download_duration_sum{success="true"} / beekeeper_net_avail_data_download_duration_count{success="true"}'
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {
@@ -404,8 +404,8 @@ async function getFileDownloadSpeed24h(db) {
     const query = 'beekeeper_check_longavailability_d_download_size_bytes / (rate(beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"}[24h]) / rate(beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"}[24h]))';
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
 
     const { data } = response;
     console.log(JSON.stringify(data, null, 2))
@@ -460,8 +460,8 @@ async function getFileDownloadSpeedAllTime(db) {
     const query = 'beekeeper_check_longavailability_d_download_size_bytes / (beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"} / beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"})';
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
-    const end = "2050-12-31T23:59:59"
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}Z&step=1d`);
+    const end = new Date().toISOString().split('.')[0] + 'Z';
+    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
     const { data } = response;
 
     if (data.status === 'success' && data.data.resultType === 'matrix') {

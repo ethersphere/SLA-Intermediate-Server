@@ -401,7 +401,7 @@ async function getChunkRetrievalDurationAllTime(db) {
 async function getFileDownloadSpeed24h(db) {
   try {
     const db = client.db('sla_metrics');
-    const query = 'avg by(job) ( sum_over_time(beekeeper_check_longavailability_d_download_size_bytes{job="bee-sla"}[24h]) / (sum_over_time(beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"}[24h])))';
+    const query = 'avg by(job) ( beekeeper_check_longavailability_d_download_size_bytes / (rate(beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"}[24h]) / rate(beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"}[24h])))';
     const encodedQuery = encodeURIComponent(query);
     const start = "2023-12-13T00:00:00Z"
     const end = new Date().toISOString().split('.')[0] + 'Z';

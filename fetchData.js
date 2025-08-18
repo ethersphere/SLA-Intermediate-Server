@@ -1,542 +1,157 @@
 const axios = require('axios');
 const client = require('./db.js');
 
+/**
+ * A generic function to fetch metric data from Prometheus and store it incrementally in MongoDB.
+ * @param {Db} db - The MongoDB database instance.
+ * @param {string} collectionName - The name of the collection to store the metric in.
+ * @param {string} promQuery - The Prometheus query string.
+ * @param {string} metricName - A human-readable name for the metric.
+ * @param {string} unit - The unit of the metric (e.g., "%", "ms").
+ * @param {number} valueMultiplier - A number to multiply the raw value by (e.g., 100 for percentages).
+ * @param {boolean} aggregateResults - Whether to aggregate results from multiple time series.
+ */
+async function updateMetricData(db, { collectionName, promQuery, metricName, unit, valueMultiplier = 1, aggregateResults = false }) {
+  console.log(`--- Starting update for: ${metricName} ---`);
+  const collection = db.collection(collectionName);
+  let requestUrl = ''; // To store the URL for logging purposes
 
-// Availability 
-async function getDownloadSuccess24h(db) {
   try {
+    // Find the existing document for this metric. We assume one document per metric.
+    const existingMetric = await collection.findOne({});
+    let startTime;
 
-    const db = client.db('sla_metrics');
-    const query = '(increase(beekeeper_net_avail_download_attempts[24h]) - increase(beekeeper_net_avail_download_errors_count[24h])) / increase(beekeeper_net_avail_download_attempts[24h])'
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z'; 
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-    const { data } = response;
-
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let { values } = data.data.result[0];
-
-      // Convert timestamps to human-readable ISO date strings and check for numeric values
-      values = values.reduce((acc, [timestamp, value]) => {
-        const date = new Date(timestamp * 1000).toISOString();
-        let numericValue = parseFloat(value) * 100;
-        if (Number.isFinite(numericValue)) {
-          acc.push([date, numericValue]);
-        }
-        return acc;
-      }, []);
-
-      const downloadSuccess24h = {
-        values: values,
-        unit: "%",
-        metric: "24h Download Success Rate"
-      };
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('download_success_24h');
-      const insertResult = await collection.insertOne(downloadSuccess24h);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted.');
-      }
-      console.log('Data saved to MongoDB: download_success_24h', JSON.stringify(downloadSuccess24h, null, 2));
+    // If data exists, find the last timestamp and start fetching from there.
+    if (existingMetric && existingMetric.values && existingMetric.values.length > 0) {
+      const lastEntry = existingMetric.values[existingMetric.values.length - 1];
+      const lastTimestampStr = lastEntry[0];
+      // Start from the second after the last entry to avoid duplicates.
+      const startDate = new Date(new Date(lastTimestampStr).getTime() + 1000);
+      startTime = startDate.toISOString().split('.')[0] + 'Z';
+      console.log(`Found existing data. Fetching new data since ${startTime} for ${metricName}.`);
     } else {
-      console.error(`Invalid response from Prometheus (${downloadSuccess24h.metric}):`, data);
+      // If no data exists, fetch the last 30 days to create a baseline.
+      const startDate = new Date();
+      startDate.setDate(startDate.getDate() - 30);
+      startTime = startDate.toISOString().split('.')[0] + 'Z';
+      console.log(`No existing data found. Fetching initial 30-day baseline for ${metricName}.`);
     }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  } finally {
 
-  }
-}
+    const endTime = new Date().toISOString().split('.')[0] + 'Z';
+    const encodedQuery = encodeURIComponent(promQuery);
+    requestUrl = `${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${startTime}&end=${endTime}&step=1d`;
 
-async function getUploadSuccess24h(db) {
-  try {
-
-    const db = client.db('sla_metrics');
-
-    const query = '(increase(beekeeper_net_avail_upload_attempts[24h]) - increase(beekeeper_net_avail_upload_errors_count[24h])) / increase(beekeeper_net_avail_upload_attempts[24h])'
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
+    // Make the API call to Prometheus
+    console.log(`Querying Prometheus for '${metricName}': ${requestUrl}`);
+    const response = await axios.get(requestUrl);
     const { data } = response;
+    console.log(`Successfully fetched data for '${metricName}'.`);
 
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let { values } = data.data.result[0];
 
-      // Convert timestamps to human-readable ISO date strings and check for numeric values
-      values = values.reduce((acc, [timestamp, value]) => {
-        const date = new Date(timestamp * 1000).toISOString();
-        let numericValue = parseFloat(value) * 100;
-        if (Number.isFinite(numericValue)) {
-          acc.push([date, numericValue]);
-        }
-        return acc;
-      }, []);
-
-      const uploadSuccess24h = {
-        values: values,
-        unit: "%",
-        metric: "24h Upload Success Rate"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('upload_success_24h');
-      const insertResult = await collection.insertOne(uploadSuccess24h);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted');
-      }
-
-      console.log('Data saved to MongoDB: upload_success_24h', JSON.stringify(uploadSuccess24h, null, 2));
-    } else {
-      console.error(`Invalid response from Prometheus (${uploadSuccess24h.metric}):`, data);
+    // Validate the response from Prometheus
+    if (data.status !== 'success' || data.data.resultType !== 'matrix' || !data.data.result) {
+      console.error(`Invalid or empty response from Prometheus for ${metricName}:`, JSON.stringify(data, null, 2));
+      return;
     }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  }
-}
-
-async function getDownloadSuccessAllTime(db) {
-  // For individual chunks
-  try {
-
-    const db = client.db('sla_metrics');
-    const query = '(sum_over_time(beekeeper_net_avail_download_attempts[1h]) - sum_over_time(beekeeper_net_avail_download_errors_count[1h])) / sum_over_time(beekeeper_net_avail_download_attempts[1h])'
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-    const { data } = response;
-
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let { values } = data.data.result[0];
-      // Convert timestamps to human-readable ISO date strings and check for numeric values
-      values = values.reduce((acc, [timestamp, value]) => {
-        const date = new Date(timestamp * 1000).toISOString();
-        let numericValue = parseFloat(value) * 100;
-        if (Number.isFinite(numericValue)) {
-          acc.push([date, numericValue]);
-        }
-        return acc;
-      }, []);
-
-      const downloadSuccessAllTime = {
-        values: values,
-        unit: "%",
-        metric: "All Time Chunk Download Success Rate"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('download_success_all_time');
-      const insertResult = await collection.insertOne(downloadSuccessAllTime);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted.');
-      }
-      console.log('Data saved to MongoDB: downloadSuccessAllTime', JSON.stringify(downloadSuccessAllTime, null, 2));
-
-
-    } else {
-      console.error(`Invalid response from Prometheus (${downloadSuccessAllTime.metric}):`, data);
+    
+    if (data.data.result.length === 0) {
+        console.log(`No new data points found for ${metricName}.`);
+        return;
     }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  } finally {
 
-  }
-}
-
-async function getUploadSuccessAllTime(db) {
-  try {
-
-    const db = client.db('sla_metrics');
-    const query = '(sum_over_time(beekeeper_net_avail_upload_attempts[1h]) - sum_over_time(beekeeper_net_avail_upload_errors_count[1h])) / sum_over_time(beekeeper_net_avail_upload_attempts[1h])'
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-    const { data } = response;
-
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let { values } = data.data.result[0];
-      // Convert timestamps to human-readable ISO date strings and check for numeric values
-      values = values.reduce((acc, [timestamp, value]) => {
-        const date = new Date(timestamp * 1000).toISOString();
-        let numericValue = parseFloat(value) * 100;
-        if (Number.isFinite(numericValue)) {
-          acc.push([date, numericValue]);
-        }
-        return acc;
-      }, []);
-
-      const uploadSuccessAllTime = {
-        values: values,
-        unit: "%",
-        metric: "All Time Upload Success Rate"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('upload_success_all_time');
-      const insertResult = await collection.insertOne(uploadSuccessAllTime);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted');
-      }
-      console.log('Data saved to MongoDB: uploadSuccessAllTime', JSON.stringify(uploadSuccessAllTime, null, 2));
-
-    } else {
-      console.error(`Invalid response from Prometheus (${uploadSuccessAllTime.metric}):`, data);
-    }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  } finally {
-  }
-}
-
-// Durability 
-async function getFileRetrievalRate24h(db) {
-  try {
-    const db = client.db('sla_metrics');
-    const query = '1.0 - (sum(increase(beekeeper_check_data_durability_file_download_errors{job="bee-sla"}[86400s]))/sum(increase(beekeeper_check_data_durability_file_download_attempts{job="bee-sla"}[86400s])))'
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-    const { data } = response;
-
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let { values } = data.data.result[0];
-      // Convert timestamps to human-readable ISO date strings and check for numeric values
-      values = values.reduce((acc, [timestamp, value]) => {
-        const date = new Date(timestamp * 1000).toISOString();
-        let numericValue = parseFloat(value) * 100;
-        if (Number.isFinite(numericValue)) {
-          acc.push([date, numericValue]);
-        }
-        return acc;
-      }, []);
-
-      const fileRetrievalRate24h = {
-        values: values,
-        unit: "%",
-        metric: "24h File Retrieval Rate"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('file_retrieval_rate_24h');
-      const insertResult = await collection.insertOne(fileRetrievalRate24h);
-      
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted');
-      }
-
-      console.log('Data saved to MongoDB: file_retrieval_rate', JSON.stringify(fileRetrievalRate24h, null, 2));
-    } else {
-      console.error(`Invalid response from Prometheus (${fileRetrievalRate24h.metric}):`, data);
-    }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  }
-}
-async function getChunkRetrievalRate24h(db) {
-  try {
-    const db = client.db('sla_metrics');
-
-    const query = '1.0 - (sum(increase(beekeeper_check_data_durability_chunk_download_errors{job="bee-sla"}[172800s]))/sum(increase(beekeeper_check_data_durability_chunk_download_attempts{job="bee-sla"}[172800s])))'
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-    const { data } = response;
-
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let { values } = data.data.result[0];
-
-      // Convert timestamps to human-readable ISO date strings and check for numeric values
-      values = values.reduce((acc, [timestamp, value]) => {
-        const date = new Date(timestamp * 1000).toISOString();
-        let numericValue = parseFloat(value) * 100;
-        if (Number.isFinite(numericValue)) {
-          acc.push([date, numericValue]);
-        }
-        return acc;
-      }, []);
-
-      const chunkRetrievalRate = {
-        values: values,
-        unit: "%",
-        metric: "24h Chunk Retrieval Rate"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('chunk_retrieval_rate_24h');
-      const insertResult = await collection.insertOne(chunkRetrievalRate);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted');
-      }
-
-      console.log('Data saved to MongoDB: file_retrieval_rate', JSON.stringify(chunkRetrievalRate, null, 2));
-    } else {
-      console.error(`Invalid response from Prometheus (${chunkRetrievalRate.metric}):`, data);
-    }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  } finally {
-
-  }
-}
-
-// Latency 
-async function getChunkRetrievalDuration24h(db) {
-  try {
-
-    const db = client.db('sla_metrics');
-    const query = 'increase(beekeeper_net_avail_data_download_duration_sum{success="true"}[24h]) / increase(beekeeper_net_avail_data_download_duration_count{success="true"}[24h])'
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-    const { data } = response;
-
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let { values } = data.data.result[0];
-      // Convert timestamps to human-readable ISO date strings and check for numeric values
-      values = values.reduce((acc, [timestamp, value]) => {
-        const date = new Date(timestamp * 1000).toISOString();
-        let numericValue = parseFloat(value) * 1000;
-        if (Number.isFinite(numericValue)) {
-          acc.push([date, numericValue]);
-        }
-        return acc;
-      }, []);
-
-      const chunkRetrievalDuration24h = {
-        values: values,
-        unit: "ms",
-        metric: "24h Chunk Retrieval Duration"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('chunk_retrieval_duration_24h');
-      const insertResult = await collection.insertOne(chunkRetrievalDuration24h);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted.');
-      }
-
-      console.log('Data saved to MongoDB: chunk_retrieval_duration_24h', JSON.stringify(chunkRetrievalDuration24h, null, 2));
-    } else {
-      // console.error(`Invalid response from Prometheus (${chunkRetrievalDuration24h.metric}):`, data);
-    }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  }
-}
-
-async function getChunkRetrievalDurationAllTime(db) {
-  try {
-
-    const db = client.db('sla_metrics');
-    const query = 'beekeeper_net_avail_data_download_duration_sum{success="true"} / beekeeper_net_avail_data_download_duration_count{success="true"}'
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-    const { data } = response;
-
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let { values } = data.data.result[0];
-
-      // Convert timestamps to human-readable ISO date strings and check for numeric values
-      values = values.reduce((acc, [timestamp, value]) => {
-        const date = new Date(timestamp * 1000).toISOString();
-        let numericValue = parseFloat(value) * 1000;
-        if (Number.isFinite(numericValue)) {
-          acc.push([date, numericValue]);
-        }
-        return acc;
-      }, []);
-      const chunkRetrievalDurationAllTime = {
-        values: values,
-        unit: "ms",
-        metric: "All Time Chunk Retrieval Duration"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('chunk_retrieval_duration_all_time');
-      const insertResult = await collection.insertOne(chunkRetrievalDurationAllTime);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted.');
-      }
-
-      console.log('Data saved to MongoDB: chunk_retrieval_duration_all_time', JSON.stringify(chunkRetrievalDurationAllTime, null, 2));
-    } else {
-      console.error(`Invalid response from Prometheus (${chunkRetrievalDurationAllTime.metric}):`, data);
-    }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  }
-}
-
-async function getFileDownloadSpeed24h(db) {
-  try {
-    const db = client.db('sla_metrics');
-    const query = 'avg by(job) ( beekeeper_check_longavailability_d_download_size_bytes / (rate(beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"}[24h]) / rate(beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"}[24h])))';
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-
-    const { data } = response;
-    console.log(JSON.stringify(data, null, 2))
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let aggregatedValues = {};
-
-      // Aggregate values by timestamp
-      data.data.result.forEach(result => {
-        result.values.forEach(([timestamp, value]) => {
-          if (!aggregatedValues[timestamp]) {
-            aggregatedValues[timestamp] = [];
-          }
-          aggregatedValues[timestamp].push(parseFloat(value));
+    // Process the new values from the response
+    let newValues;
+    if (aggregateResults) {
+        let aggregatedValues = {};
+        data.data.result.forEach(result => {
+            result.values.forEach(([timestamp, value]) => {
+                if (!aggregatedValues[timestamp]) {
+                    aggregatedValues[timestamp] = [];
+                }
+                aggregatedValues[timestamp].push(parseFloat(value));
+            });
         });
-      });
 
-      // Calculate averages for each timestamp and convert to Mebibytes
-      let averageValues = Object.entries(aggregatedValues).map(([timestamp, values]) => {
-        const average = values.reduce((sum, val) => sum + val, 0) / values.length;
-        const averageMebibytes = average / 1048576; // Convert bytes to Mebibytes
-        return [new Date(timestamp * 1000).toISOString(), averageMebibytes];
-      });
+        newValues = Object.entries(aggregatedValues).map(([timestamp, values]) => {
+            const average = values.reduce((sum, val) => sum + val, 0) / values.length;
+            const finalValue = average * valueMultiplier;
+            return [new Date(timestamp * 1000).toISOString(), finalValue];
+        }).filter(([, value]) => Number.isFinite(value));
 
-      const fileDownloadSpeed24h = {
-        values: averageValues,
-        unit: "MiB/s",
-        metric: "File Download Speed 24h"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('file_download_speed_24h');
-      const insertResult = await collection.insertOne(fileDownloadSpeed24h);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted.');
-      }
-
-      console.log('Data saved to MongoDB: file_download_speed_24h', JSON.stringify(fileDownloadSpeed24h, null, 2));
     } else {
-      console.error(`Invalid response from Prometheus (${fileDownloadSpeed24h.metric}):`, data);
+        newValues = data.data.result[0].values.reduce((acc, [timestamp, value]) => {
+            const date = new Date(timestamp * 1000).toISOString();
+            const numericValue = parseFloat(value) * valueMultiplier;
+            if (Number.isFinite(numericValue)) {
+                acc.push([date, numericValue]);
+            }
+            return acc;
+        }, []);
     }
+
+
+    if (newValues.length === 0) {
+      console.log(`No new valid data points to add for ${metricName}.`);
+      return;
+    }
+
+    // Update the database
+    if (existingMetric) {
+      // If a document exists, append the new values to the array.
+      const result = await collection.updateOne(
+        { _id: existingMetric._id },
+        { $push: { values: { $each: newValues } } }
+      );
+      console.log(`${result.modifiedCount > 0 ? newValues.length : 0} new data points saved for ${metricName}.`);
+    } else {
+      // If no document exists, create a new one.
+      const metricDocument = {
+        values: newValues,
+        unit: unit,
+        metric: metricName
+      };
+      await collection.insertOne(metricDocument);
+      console.log(`Initial document created with ${newValues.length} data points for ${metricName}.`);
+    }
+
   } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
+    console.error(`Error querying Prometheus for '${metricName}'. URL: ${requestUrl}. Error:`, error.message);
   }
 }
 
-async function getFileDownloadSpeedAllTime(db) {
-  try {
-    const db = client.db('sla_metrics');
-    const query = 'beekeeper_check_longavailability_d_download_size_bytes / (beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"} / beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"})';
-    const encodedQuery = encodeURIComponent(query);
-    const start = "2023-12-13T00:00:00Z"
-    const end = new Date().toISOString().split('.')[0] + 'Z';
-    const response = await axios.get(`${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${start}&end=${end}&step=1d`);
-    const { data } = response;
-
-    if (data.status === 'success' && data.data.resultType === 'matrix') {
-      let aggregatedValues = {};
-
-      // Aggregate values by timestamp
-      data.data.result.forEach(result => {
-        result.values.forEach(([timestamp, value]) => {
-          if (!aggregatedValues[timestamp]) {
-            aggregatedValues[timestamp] = [];
-          }
-          aggregatedValues[timestamp].push(parseFloat(value));
-        });
-      });
-      // Calculate averages for each timestamp and convert to Mebibytes
-      let averageValues = Object.entries(aggregatedValues).map(([timestamp, values]) => {
-        const average = values.reduce((sum, val) => sum + val, 0) / values.length;
-        const averageMebibytes = average / 1048576; // Convert bytes to Mebibytes
-        return [new Date(timestamp * 1000).toISOString(), averageMebibytes];
-      });
-
-      const fileDownloadSpeedAllTime = {
-        values: averageValues,
-        unit: "MiB/s",
-        metric: "File Download Speed All Time"
-      };
-
-      // Insert the data into the MongoDB collection
-      const collection = db.collection('file_download_speed_all_time');
-      const insertResult = await collection.insertOne(fileDownloadSpeedAllTime);
-
-      if (insertResult.insertedId) {
-        // Delete all older entries
-        await collection.deleteMany({ _id: { $ne: insertResult.insertedId } });
-        console.log('Old entries deleted.');
-      }
-
-      console.log('Data saved to MongoDB: file_download_speed_all_time', JSON.stringify(fileDownloadSpeedAllTime, null, 2));
-    } else {
-      console.error(`Invalid response from Prometheus (${fileDownloadSpeedAllTime.metric}):`, data);
-    }
-  } catch (error) {
-    console.error('Error fetching data from Prometheus:', error.message);
-  }
-}
-
-
+/**
+ * Main function to fetch all defined metrics.
+ */
 async function fetchData() {
   try {
     const db = client.db('sla_metrics');
-    let metrics = [
-      getDownloadSuccess24h(db),
-      getUploadSuccess24h(db),
-      getDownloadSuccessAllTime(db),
-      getUploadSuccessAllTime(db),
-      getFileRetrievalRate24h(db),
-      getChunkRetrievalRate24h(db),
-      getChunkRetrievalDuration24h(db),
-      getChunkRetrievalDurationAllTime(db),
-      getFileDownloadSpeed24h(db),
-      getFileDownloadSpeedAllTime(db)
+
+    // Configuration for all metrics to be fetched.
+    const metricsToFetch = [
+      // Availability
+      { collectionName: 'download_success_24h', promQuery: '(increase(beekeeper_net_avail_download_attempts[24h]) - increase(beekeeper_net_avail_download_errors_count[24h])) / increase(beekeeper_net_avail_download_attempts[24h])', metricName: '24h Download Success Rate', unit: '%', valueMultiplier: 100 },
+      { collectionName: 'upload_success_24h', promQuery: '(increase(beekeeper_net_avail_upload_attempts[24h]) - increase(beekeeper_net_avail_upload_errors_count[24h])) / increase(beekeeper_net_avail_upload_attempts[24h])', metricName: '24h Upload Success Rate', unit: '%', valueMultiplier: 100 },
+      { collectionName: 'download_success_all_time', promQuery: '(sum_over_time(beekeeper_net_avail_download_attempts[1h]) - sum_over_time(beekeeper_net_avail_download_errors_count[1h])) / sum_over_time(beekeeper_net_avail_download_attempts[1h])', metricName: 'All Time Chunk Download Success Rate', unit: '%', valueMultiplier: 100 },
+      { collectionName: 'upload_success_all_time', promQuery: '(sum_over_time(beekeeper_net_avail_upload_attempts[1h]) - sum_over_time(beekeeper_net_avail_upload_errors_count[1h])) / sum_over_time(beekeeper_net_avail_upload_attempts[1h])', metricName: 'All Time Upload Success Rate', unit: '%', valueMultiplier: 100 },
+      // Durability
+      { collectionName: 'file_retrieval_rate_24h', promQuery: '1.0 - (sum(increase(beekeeper_check_data_durability_file_download_errors{job="bee-sla"}[86400s]))/sum(increase(beekeeper_check_data_durability_file_download_attempts{job="bee-sla"}[86400s])))', metricName: '24h File Retrieval Rate', unit: '%', valueMultiplier: 100 },
+      { collectionName: 'chunk_retrieval_rate_24h', promQuery: '1.0 - (sum(increase(beekeeper_check_data_durability_chunk_download_errors{job="bee-sla"}[172800s]))/sum(increase(beekeeper_check_data_durability_chunk_download_attempts{job="bee-sla"}[172800s])))', metricName: '24h Chunk Retrieval Rate', unit: '%', valueMultiplier: 100 },
+      // Latency
+      { collectionName: 'chunk_retrieval_duration_24h', promQuery: 'increase(beekeeper_net_avail_data_download_duration_sum{success="true"}[24h]) / increase(beekeeper_net_avail_data_download_duration_count{success="true"}[24h])', metricName: '24h Chunk Retrieval Duration', unit: 'ms', valueMultiplier: 1000 },
+      { collectionName: 'chunk_retrieval_duration_all_time', promQuery: 'beekeeper_net_avail_data_download_duration_sum{success="true"} / beekeeper_net_avail_data_download_duration_count{success="true"}', metricName: 'All Time Chunk Retrieval Duration', unit: 'ms', valueMultiplier: 1000 },
+      { collectionName: 'file_download_speed_24h', promQuery: 'avg by(job) ( beekeeper_check_longavailability_d_download_size_bytes / (rate(beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"}[24h]) / rate(beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"}[24h])))', metricName: 'File Download Speed 24h', unit: 'MiB/s', valueMultiplier: 1 / 1048576, aggregateResults: true },
+      { collectionName: 'file_download_speed_all_time', promQuery: 'beekeeper_check_longavailability_d_download_size_bytes / (beekeeper_check_longavailability_d_download_duration_seconds_sum{job="bee-sla"} / beekeeper_check_longavailability_d_download_duration_seconds_count{job="bee-sla"})', metricName: 'File Download Speed All Time', unit: 'MiB/s', valueMultiplier: 1 / 1048576, aggregateResults: true },
     ];
 
-    // Execute all metrics functions; 
-    await Promise.all(metrics);
+    // Execute all metric updates in parallel.
+    const updatePromises = metricsToFetch.map(metricConfig => updateMetricData(db, metricConfig));
+    await Promise.all(updatePromises);
 
-    console.log('All metrics functions executed successfully.');
+    console.log('All metrics have been updated successfully.');
 
   } catch (error) {
-    console.error('Error fetching data:', error.message);
-    // Additional error handling can be added here if necessary
+    console.error('An error occurred in the main fetchData function:', error.message);
   }
 }
 
-
 module.exports = fetchData;
-
-

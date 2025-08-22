@@ -8,43 +8,29 @@ router.get('/api/v1/all', async (req, res) => {
     const db = client.db('sla_metrics');
 
     // Get a list of all collection names in the database
-    const collectionNames = await db.listCollections().toArray();
+    const collectionInfos = await db.listCollections().toArray();
     const collections = {};
 
     // Loop through collections and get the most recent entry from each
-    for (const { name } of collectionNames) {
-      const collection = db.collection(name);
-      const mostRecentEntry = await collection
-        .find()
-        .sort({ timestamp: -1 })
-        .limit(1)
-        .toArray();
+    for (const collectionInfo of collectionInfos) {
+      const collectionName = collectionInfo.name;
+      const collection = db.collection(collectionName);
+      
+      // Since there's only one document per metric collection, we can just find one
+      const metricDocument = await collection.findOne({});
 
-      if (mostRecentEntry.length > 0) {
-        collections[name] = mostRecentEntry[0];
+      if (metricDocument && metricDocument.values) {
+        // Filter out future timestamp values
+        const now = new Date();
+        metricDocument.values = metricDocument.values.filter(value => {
+          const valueDate = new Date(value[0]);
+          return valueDate <= now;
+        });
+
+        collections[collectionName] = metricDocument;
       }
     }
-
-// Loop through collections and get the most recent entry from each
-for (const { name } of collectionNames) {
-  const collection = db.collection(name);
-  const mostRecentEntry = await collection
-    .find()
-    .sort({ timestamp: -1 })
-    .limit(1)
-    .toArray();
-
-  if (mostRecentEntry.length > 0) {
-    // Filter out future timestamp values
-    const now = new Date();
-    mostRecentEntry[0].values = mostRecentEntry[0].values.filter(value => {
-      const valueDate = new Date(value[0]);
-      return valueDate <= now;
-    });
-
-    collections[name] = mostRecentEntry[0];
-  }
-}
+    
     // Return the most recent entries from each collection
     res.json(collections);
   } catch (error) {

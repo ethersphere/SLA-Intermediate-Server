@@ -39,7 +39,7 @@ async function updateMetricData(db, { collectionName, promQuery, metricName, uni
 
     const endTime = new Date().toISOString().split('.')[0] + 'Z';
     const encodedQuery = encodeURIComponent(promQuery);
-    requestUrl = `${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${startTime}&end=${endTime}&step=1d`;
+    requestUrl = `${process.env.PROMETHEUS}query_range?query=${encodedQuery}&start=${startTime}&end=${endTime}&step=6h`;
 
     // Make the API call to Prometheus
     console.log(`Querying Prometheus for '${metricName}': ${requestUrl}`);

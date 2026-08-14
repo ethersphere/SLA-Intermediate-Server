@@ -125,12 +125,21 @@ async function updateMetricData(db, { collectionName, promQuery, metricName, uni
       return;
     }
 
+    // Timestamp of this successful collection. Exposed as a top-level field so consumers can
+    // tell fresh data from a stalled collector -- the newest entry in `values` is the
+    // Prometheus sample time, which says nothing about whether we are still collecting.
+    const lastUpdated = new Date().toISOString();
+
     // Update the database
     if (existingMetric) {
       // If a document exists, append the new values to the array.
+      // `values` is intentionally left untouched so existing consumers keep working.
       const result = await collection.updateOne(
         { _id: existingMetric._id },
-        { $push: { values: { $each: newValues } } }
+        {
+          $push: { values: { $each: newValues } },
+          $set: { lastUpdated: lastUpdated }
+        }
       );
       console.log(`${result.modifiedCount > 0 ? newValues.length : 0} new data points saved for ${metricName}.`);
     } else {
@@ -138,7 +147,8 @@ async function updateMetricData(db, { collectionName, promQuery, metricName, uni
       const metricDocument = {
         values: newValues,
         unit: unit,
-        metric: metricName
+        metric: metricName,
+        lastUpdated: lastUpdated
       };
       await collection.insertOne(metricDocument);
       console.log(`Initial document created with ${newValues.length} data points for ${metricName}.`);

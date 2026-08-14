@@ -2,6 +2,24 @@ const axios = require('axios');
 const client = require('./db.js');
 
 /**
+ * Builds a short, human-readable description of a set of Prometheus series, listing only the
+ * labels that actually differ between them. That keeps a multi-series warning focused on the
+ * thing that distinguishes the series (typically `instance` or `job`) instead of dumping every
+ * label. If nothing differs (e.g. label-less series produced by sum()), all labels are shown.
+ * @param {Array<{metric: Object}>} results - The `data.result` array from a Prometheus response.
+ * @returns {string} e.g. `{job="bee-sla"} | {job="bee-sla-old"}`
+ */
+function describeSeriesLabels(results) {
+  const labelKeys = [...new Set(results.flatMap(result => Object.keys(result.metric || {})))];
+  const differingKeys = labelKeys.filter(key => new Set(results.map(result => (result.metric || {})[key])).size > 1);
+  const keysToShow = differingKeys.length > 0 ? differingKeys : labelKeys;
+
+  return results
+    .map(result => `{${keysToShow.map(key => `${key}="${(result.metric || {})[key] ?? ''}"`).join(', ')}}`)
+    .join(' | ');
+}
+
+/**
  * A generic function to fetch metric data from Prometheus and store it incrementally in MongoDB.
  * @param {Db} db - The MongoDB database instance.
  * @param {string} collectionName - The name of the collection to store the metric in.
@@ -59,9 +77,21 @@ async function updateMetricData(db, { collectionName, promQuery, metricName, uni
         return;
     }
 
+    // A query can match more than one series -- for example when a stale duplicate lingers in
+    // the Pushgateway alongside the live one. The single-series path used to read result[0],
+    // which silently published whichever series Prometheus happened to return first; that is
+    // how a stale duplicate once corrupted the public dashboard. Instead, warn loudly and fold
+    // every returned series into one deterministic value. Every metric collected here is a
+    // rate, ratio or duration, so averaging across series is the meaningful combination -- the
+    // same treatment `aggregateResults` already applies, so we simply reuse that code path.
+    const seriesCount = data.data.result.length;
+    if (seriesCount > 1 && !aggregateResults) {
+      console.warn(`WARNING: query for '${metricName}' matched ${seriesCount} series; averaging them together. Distinguishing labels: ${describeSeriesLabels(data.data.result)}`);
+    }
+
     // Process the new values from the response
     let newValues;
-    if (aggregateResults) {
+    if (aggregateResults || seriesCount > 1) {
         let aggregatedValues = {};
         data.data.result.forEach(result => {
             result.values.forEach(([timestamp, value]) => {
@@ -95,12 +125,21 @@ async function updateMetricData(db, { collectionName, promQuery, metricName, uni
       return;
     }
 
+    // Timestamp of this successful collection. Exposed as a top-level field so consumers can
+    // tell fresh data from a stalled collector -- the newest entry in `values` is the
+    // Prometheus sample time, which says nothing about whether we are still collecting.
+    const lastUpdated = new Date().toISOString();
+
     // Update the database
     if (existingMetric) {
       // If a document exists, append the new values to the array.
+      // `values` is intentionally left untouched so existing consumers keep working.
       const result = await collection.updateOne(
         { _id: existingMetric._id },
-        { $push: { values: { $each: newValues } } }
+        {
+          $push: { values: { $each: newValues } },
+          $set: { lastUpdated: lastUpdated }
+        }
       );
       console.log(`${result.modifiedCount > 0 ? newValues.length : 0} new data points saved for ${metricName}.`);
     } else {
@@ -108,7 +147,8 @@ async function updateMetricData(db, { collectionName, promQuery, metricName, uni
       const metricDocument = {
         values: newValues,
         unit: unit,
-        metric: metricName
+        metric: metricName,
+        lastUpdated: lastUpdated
       };
       await collection.insertOne(metricDocument);
       console.log(`Initial document created with ${newValues.length} data points for ${metricName}.`);
@@ -135,7 +175,9 @@ async function fetchData() {
       { collectionName: 'upload_success_all_time', promQuery: '(sum_over_time(beekeeper_net_avail_upload_attempts[1h]) - sum_over_time(beekeeper_net_avail_upload_errors_count[1h])) / sum_over_time(beekeeper_net_avail_upload_attempts[1h])', metricName: 'All Time Upload Success Rate', unit: '%', valueMultiplier: 100 },
       // Durability
       { collectionName: 'file_retrieval_rate_24h', promQuery: '1.0 - (sum(increase(beekeeper_check_data_durability_file_download_errors{job="bee-sla"}[86400s]))/sum(increase(beekeeper_check_data_durability_file_download_attempts{job="bee-sla"}[86400s])))', metricName: '24h File Retrieval Rate', unit: '%', valueMultiplier: 100 },
-      { collectionName: 'chunk_retrieval_rate_24h', promQuery: '1.0 - (sum(increase(beekeeper_check_data_durability_chunk_download_errors{job="bee-sla"}[172800s]))/sum(increase(beekeeper_check_data_durability_chunk_download_attempts{job="bee-sla"}[172800s])))', metricName: '24h Chunk Retrieval Rate', unit: '%', valueMultiplier: 100 },
+      // 86400s (24h) window, matching the metric's own name and the file retrieval rate above.
+      // This previously used 172800s (48h), so a "24h" rate was actually smoothed over two days.
+      { collectionName: 'chunk_retrieval_rate_24h', promQuery: '1.0 - (sum(increase(beekeeper_check_data_durability_chunk_download_errors{job="bee-sla"}[86400s]))/sum(increase(beekeeper_check_data_durability_chunk_download_attempts{job="bee-sla"}[86400s])))', metricName: '24h Chunk Retrieval Rate', unit: '%', valueMultiplier: 100 },
       // Latency
       { collectionName: 'chunk_retrieval_duration_24h', promQuery: 'increase(beekeeper_net_avail_data_download_duration_sum{success="true"}[24h]) / increase(beekeeper_net_avail_data_download_duration_count{success="true"}[24h])', metricName: '24h Chunk Retrieval Duration', unit: 'ms', valueMultiplier: 1000 },
       { collectionName: 'chunk_retrieval_duration_all_time', promQuery: 'beekeeper_net_avail_data_download_duration_sum{success="true"} / beekeeper_net_avail_data_download_duration_count{success="true"}', metricName: 'All Time Chunk Retrieval Duration', unit: 'ms', valueMultiplier: 1000 },

@@ -1,4 +1,4 @@
-FROM node:16.20.1-alpine3.18
+FROM node:24.22.1-alpine
 WORKDIR /usr/src/app
 COPY --chown=nobody:nogroup . .
 RUN mkdir -p /nonexistent && chown nobody:nogroup /nonexistent
